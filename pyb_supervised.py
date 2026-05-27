@@ -26,12 +26,25 @@ print(f"Number of unique NACE codes: {n_classes}")
 
 # %% SPLIT
 train_df, tmp_df = train_test_split(df, test_size=0.3, random_state=954)
-val_df, test_df  = train_test_split(tmp_df, test_size=0.5, random_state=954)
+val_df, test_df = train_test_split(tmp_df, test_size=0.5, random_state=954)
 
 X_train, y_train = train_df["label"].to_numpy(), train_df["code"].to_numpy()
 X_val, y_val = val_df["label"].to_numpy(), val_df["code"].to_numpy()
 X_test, y_test = test_df["label"].to_numpy(), test_df["code"].to_numpy()
 
 print(f"Train: {len(train_df)} | Validation: {len(val_df)} | Test: {len(test_df)}")
+
+# %% code to integers
+all_codes = set(df['code'])
+train_codes = set(train_df['code'])
+missing = all_codes - train_codes
+
+if missing:
+    print(f"WARNING: {len(missing)} code(s) missing from training set: {missing}")
+else:
+    print(f"OK — all {len(all_codes)} codes appear in the training set.")
+
+encoder = LabelEncoder()
+encoder.fit(train_df['code'].to_numpy())
 
 # %%
