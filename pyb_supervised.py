@@ -9,7 +9,17 @@ load_dotenv(override=True)
 # %%
 # Load dataset
 
-data = pl.read_parquet("https://minio.lab.sspcloud.fr/projet-formation/diffusion/funathon/2026/project2/generation_None_temp08.parquet")
-len(data)
-data.head()
+df = pl.read_parquet("https://minio.lab.sspcloud.fr/" +
+                     "projet-formation/diffusion/funathon/2026/project2/" +
+                     "generation_None_temp08.parquet")
+type(df)
+
+print(f"Total rows: {len(df)}")
+df.head(7)
+df.tail(7)
+
+# %% Count unique NACE codes
+n_classes = df['code'].n_unique()
+print(f"Number of unique NACE codes: {n_classes}")
+
 # %%
