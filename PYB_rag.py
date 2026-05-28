@@ -7,7 +7,7 @@ from openai import OpenAI
 from qdrant_client import QdrantClient
 import duckdb
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 
 # %% Load environment variables from .env file
 # QDRANT_URL=https://YOURNAMESPACE-qdrant.user.lab.sspcloud.fr/
@@ -89,6 +89,7 @@ class NaceDocument:
     includes_also: Optional[str] = None
     excludes: Optional[str] = None
 
+    vector: Optional[List[float]] = field(default=None, init=False)
     text: str = field(init=False)
 
     @classmethod
@@ -149,6 +150,25 @@ class NaceDocument:
 
         return output.strip()
 
+    def get_embeddings(
+        self,
+        client_llmlab,
+        emb_model: str,
+        verbose=False,
+    ) -> List[float]:
+        try:
+            response = client_llmlab.embeddings.create(
+                model=EMB_MODEL_NAME,
+                input=self.text
+            )
+
+            self.vector = response.data[0].embedding
+            if verbose:
+                return self.vector
+
+        except Exception as e:
+            raise RuntimeError(f"Embedding failed for doc {self.code}: {str(e)}")
+
 
 nace_documents = []
 for nace_code in nace:
@@ -160,8 +180,26 @@ for nace_code in nace:
         )
     )
 
+
 # %%
-nace_documents[0:2]
-repr(nace_documents[1])
+EMB_MODEL_NAME = "qwen3-embedding-8b"
+emb_dim = 4096
+
+from qdrant_client.models import Distance, VectorParams  # noqa: E402
+
+COLLECTION_NAME = "nace-collection"
+
+# Delete the collection if necessary
+if client_qdrant.collection_exists(collection_name=COLLECTION_NAME):
+    client_qdrant.delete_collection(collection_name=COLLECTION_NAME)
+
+# Create the collection
+client_qdrant.create_collection(
+    collection_name=COLLECTION_NAME,
+    vectors_config=VectorParams(
+        size=emb_dim,
+        distance=Distance.COSINE
+    )
+)
 
 # %%
