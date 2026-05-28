@@ -1,4 +1,4 @@
-# https://aiml4os.github.io/funathon-project2/2-rag-intro.html
+# PART 1 https://aiml4os.github.io/funathon-project2/2-rag-intro.html
 
 # %% Imports
 from dotenv import load_dotenv
@@ -273,3 +273,24 @@ for nace_code in nace:
     nace_points.append(
         nace_doc.to_qdrant_point()
     )
+
+# %% upload to qdrant (by batches)
+from more_itertools import chunked
+from tqdm import tqdm
+
+BATCH_SIZE = 16
+batches = list(chunked(nace_points, BATCH_SIZE))
+
+for batch in tqdm(batches, desc="Uploading to Qdrant", unit="batch"):
+    try:
+        client_qdrant.upsert(
+            collection_name=COLLECTION_NAME,
+            points=batch,
+        )
+    except Exception as e:
+        tqdm.write(f"✗ Batch failed: {e}")
+
+# end of part 1
+
+# PART 2 https://aiml4os.github.io/funathon-project2/2-rag-generation.html
+# generate predictions
