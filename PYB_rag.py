@@ -8,6 +8,8 @@ from qdrant_client import QdrantClient
 import duckdb
 from dataclasses import dataclass, field
 from typing import Optional, List
+from uuid import uuid5, NAMESPACE_DNS
+from qdrant_client.models import PointStruct
 
 # %% Load environment variables from .env file
 # QDRANT_URL=https://YOURNAMESPACE-qdrant.user.lab.sspcloud.fr/
@@ -63,6 +65,8 @@ nace = table.to_pylist()
 
 # %%
 nace[22]
+
+NACE_NAMESPACE = uuid5(NAMESPACE_DNS, "nace-rev2")  # for PointStruct
 
 # %% Create a class for handling nace items
 
@@ -169,6 +173,26 @@ class NaceDocument:
         except Exception as e:
             raise RuntimeError(f"Embedding failed for doc {self.code}: {str(e)}")
 
+    def to_qdrant_point(
+        self,
+    ) -> PointStruct:
+
+        if not hasattr(self, "vector") or self.vector is None:
+            raise ValueError("vector is missing or Null")
+        return PointStruct(
+            # uuid5 is deterministic: same namespace + code always yields the same UUID
+            # stable across runs, valid for Qdrant, no hacky string manipulation needed
+            id=str(uuid5(NACE_NAMESPACE, self.code)),
+            vector=self.vector,
+            payload={
+                "code": self.code,
+                "level": self.level,
+                "parent_code": self.parent_code,
+                # Storing the text used for embedding enables inspection and debugging
+                "text": self.text
+            }
+        )
+
 
 nace_documents = []
 for nace_code in nace:
@@ -230,3 +254,22 @@ print("\nPrinting the embedding vector of the first document:")
 print(nace_documents[0].vector)
 
 print(f"\nLength of this vector: {len(nace_documents[0].vector)}")
+
+# %%
+nace_points = []
+
+for nace_code in nace:
+    nace_doc = NaceDocument.from_raw(
+        raw=nace_code,
+        with_includes_also=True,
+        with_excludes=True
+    )
+
+    nace_doc.get_embeddings(
+        client_llmlab,
+        EMB_MODEL_NAME,
+    )
+
+    nace_points.append(
+        nace_doc.to_qdrant_point()
+    )
