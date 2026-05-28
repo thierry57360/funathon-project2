@@ -202,4 +202,31 @@ client_qdrant.create_collection(
     )
 )
 
+# %% Recreate NACE documents (that class has been updated)
+
+sample_size = 10
+
+nace_documents = []
+for nace_code in nace[:sample_size]:
+    nace_documents.append(
+        NaceDocument.from_raw(
+            raw=nace_code,
+            with_includes_also=True,
+            with_excludes=True
+        )
+    )
+
+for nace_doc in nace_documents:
+    nace_doc.get_embeddings(
+        client_llmlab,
+        EMB_MODEL_NAME
+    )
+
 # %%
+print("\nPrinting the first document:")
+print(nace_documents[0])
+
+print("\nPrinting the embedding vector of the first document:")
+print(nace_documents[0].vector)
+
+print(f"\nLength of this vector: {len(nace_documents[0].vector)}")
