@@ -275,8 +275,8 @@ for nace_code in nace:
     )
 
 # %% upload to qdrant (by batches)
-from more_itertools import chunked
-from tqdm import tqdm
+from more_itertools import chunked  # noqa: E402
+from tqdm import tqdm  # noqa: E402
 
 BATCH_SIZE = 16
 batches = list(chunked(nace_points, BATCH_SIZE))
@@ -294,3 +294,80 @@ for batch in tqdm(batches, desc="Uploading to Qdrant", unit="batch"):
 
 # PART 2 https://aiml4os.github.io/funathon-project2/2-rag-generation.html
 # generate predictions
+
+# %% Connections and global parameters
+
+# Models
+EMB_MODEL_NAME = "qwen3-embedding-8b"   # Embedding model
+GEN_MODEL_NAME = "gemma4-26b-moe"       # Generative model
+# Qdrant
+COLLECTION_NAME = "nace-collection"
+RETRIEVER_LIMIT = 5  # Number of candidates returned by the vector search
+# Generation
+TEMPERATURE = 0.1    # Low temperature → more deterministic, reproducible outputs
+# Evaluation
+SAMPLE_SIZE = 100    # Number of activities to evaluate (increase for more robust results)
+
+
+# %% test on single example
+activity = "Installation, maintenance and repair of residential air conditioning systems for private customers"
+
+response = client_llmlab.embeddings.create(
+    model=EMB_MODEL_NAME,
+    input=activity
+)
+
+search_embedding = response.data[0].embedding
+print(f"Vector created of length: {len(search_embedding)}")
+
+# %%
+points = client_qdrant.query_points(
+    collection_name=COLLECTION_NAME,
+    query=search_embedding,
+    limit=RETRIEVER_LIMIT,
+)
+
+descriptions_retrieved = []
+codes_retrieved = []
+
+for point in points.model_dump()["points"]:
+    descriptions_retrieved.append(point["payload"]["text"])
+    codes_retrieved.append(point["payload"]["code"])
+
+print(
+    f"✓ Vector search completed: {len(descriptions_retrieved)} codes and descriptions retrieved\n"
+)
+print("Check the 5 codes retrieved ==============\n")
+for d in descriptions_retrieved:
+    print(d)
+    print("-----")
+
+# %% PROMPT CONSTRUCTION
+
+SYSTEM_PROMPT = """\
+You are an expert classifier for the NACE 2.1 nomenclature (Statistical Classification of Economic Activities in the European Community).
+
+Given a company activity description and a short list of candidate NACE codes, your job is to pick the single most appropriate code from the candidates — or to declare the activity not codable if the description is too ambiguous.
+
+Always reply with a valid JSON object matching the requested schema. No explanations, no extra text.
+"""
+
+USER_PROMPT_TEMPLATE = """\
+## Activity to classify
+{activity}
+
+## Candidate NACE codes and their explanatory notes
+{proposed_nace_descriptions}
+
+## Rules
+- Pick exactly one code from this list: [{proposed_nace_codes}]. Do not invent codes outside the list.
+- If several activities are mentioned, only consider the first one.
+- If the description is too vague to decide, return `nace_code: null` and `codable: false`.
+
+## Output — valid JSON only
+{{
+  "nace_code": "<one code from the candidate list, or null>",
+  "codable": <true | false>,
+  "confidence": <float between 0.0 and 1.0>
+}}
+"""
